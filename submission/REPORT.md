@@ -51,7 +51,25 @@ Người chỉ lộ một phần ở mép ảnh mà vẫn gán `person` là đú
 - **Model cũng nhầm:** nếu yolo26l và nhãn cùng nhầm lớp (xe tải/xe con), máy im lặng.
 
 ## 5. Train: raw vs clean (tùy chọn, chấm riêng)
-Chưa chạy: chưa train trên Colab. Mục này để trống, `make check-core` không yêu cầu.
+Cấu hình (giống nhau cho mọi lần chạy): `yolo26n.pt`, 20 epoch, imgsz 640, batch 16, seed 0 và 1, GPU T4 (Colab); val = `gold_val` (40 ảnh), test = `data/test` (100 ảnh). Chỉ khác dữ liệu train (`submission/results/comparison.md`, do `scripts/summarize_results.py` sinh):
+
+| biến thể | #ảnh train | số seed | mAP50 | mAP50-95 | precision | recall |
+|---|---|---|---|---|---|---|
+| raw | 224 | 2 | 0,726 ± 0,000 | 0,512 ± 0,004 | 0,764 ± 0,061 | 0,649 ± 0,028 |
+| clean | 203 | 2 | 0,699 ± 0,013 | 0,489 ± 0,016 | 0,804 ± 0,092 | 0,588 ± 0,065 |
+
+**Kết quả:** chênh mAP50 (clean − raw) = **−0,026**: `clean` **không tốt hơn** `raw` mà thấp hơn. Độ lệch giữa 2 seed: 0,0003 ở `raw` (0,7256 và 0,7259) và 0,018 ở `clean` (0,690 và 0,709). Hai khoảng giá trị không chồng nhau, nhưng mỗi biến thể chỉ có 2 seed và test chỉ có 100 ảnh nên không đủ để kết luận `clean` kém hơn nói chung. AP50 theo lớp (trung bình 2 seed, raw → clean): car 0,738 → 0,744; person 0,822 → 0,822; bus 0,695 → 0,690; **truck 0,648 → 0,541** (giảm 0,107, gần như toàn bộ phần chênh). Precision của `clean` cao hơn (0,804 so với 0,764) còn recall thấp hơn (0,588 so với 0,649).
+
+**Kết luận trung thực:** trong thí nghiệm này pipeline không cải thiện mAP50 trên tập test; không có bằng chứng để nói dữ liệu sau pipeline tốt hơn. Phần lớn chênh lệch nằm ở lớp `truck`, lớp ít box nhất (32 box trong `raw`, 40 trong `clean`), nên rất nhiễu.
+
+**Giả thuyết giải thích (chưa kiểm chứng, kèm cách kiểm):**
+1. **Rò rỉ làm `raw` bị thổi phồng:** `raw` chứa 5 ảnh `LEAK_TEST` trùng với ảnh test (`01_intake.csv`), tức model đã thấy ảnh test lúc train. Cách kiểm: train thêm biến thể `raw` đã bỏ 5 ảnh này, hoặc tính mAP trên test đã bỏ 5 ảnh bị trùng, rồi so lại.
+2. **`clean` còn nhãn máy chưa được người duyệt:** hàng đợi 118 ảnh nhưng chỉ duyệt 80, còn 29/203 ảnh (14,3%) cảnh báo (`07_error_list_v3`), và `clean` ít ảnh hơn `raw` 21 ảnh (203 so với 224). Cách kiểm: train biến thể `oracle` (cùng ảnh `clean`, nhãn người) làm chặn trên; nếu `oracle` vượt `raw` thì nhãn còn lỗi mới là nguyên nhân.
+3. **Test nhỏ và lớp `truck` hiếm:** 100 ảnh test, `truck` chỉ có vài chục box nên AP biến động mạnh theo seed. Cách kiểm: chạy ≥ 5 seed mỗi biến thể rồi so chênh với độ lệch chuẩn.
+
+Hạn chế: `train_images` là số file trong thư mục train; số ảnh Ultralytics thực sự dùng của `raw` có thể ít hơn vì nó bỏ ảnh/nhãn hỏng. Tôi chưa đối chiếu cảnh báo trong log Colab nên chưa khẳng định con số đó.
+
+**Việc tiếp theo:** train `oracle` và `raw` bỏ ảnh rò rỉ, tăng số seed lên ≥ 5, và duyệt nốt hàng đợi để `clean` đạt Release rồi so lại.
 
 ## 6. Quyết định và ghi chú AI
 (a) **Quyết định: Hold.** Không có lỗi bắt buộc nhưng 29/203 ảnh (14,3%) còn cảnh báo chưa người duyệt. Để thành Release cần ≤ 20 ảnh còn cảnh báo (10% của 203), tức là người cần duyệt thêm ít nhất 9 ảnh trong 29 ảnh đó (chủ yếu `POSSIBLE_FALSE_POS` và `POSSIBLE_LOOSE_BOX`), hoặc một đợt duyệt khác ngoài ngân sách 80 ảnh. Ngưỡng và ngân sách không được đổi.
