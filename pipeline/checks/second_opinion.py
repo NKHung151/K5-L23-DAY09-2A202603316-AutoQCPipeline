@@ -40,5 +40,53 @@ from ..model_cache import get_preds  # noqa: F401
 
 
 def run(ds, cfg, preds=None):
-    # TODO
-    raise NotImplementedError("check second_opinion chưa làm")
+    c = cfg["second_opinion"]
+    if preds is None:
+        preds = get_preds(ds, cfg, "checker")
+    issues = []
+
+    def add(code, stem, msg, line=None, **extra):
+        issues.append(Issue("second_opinion", WARN, code, stem, msg, line, extra))
+
+    for p in ds.image_files():
+        stem = p.stem
+        if stem not in preds:
+            continue
+        lines = ds.read_label_lines(stem)
+        size = ds.image_size(stem)
+        if lines is None or not size:
+            continue
+        W, H = size
+
+        labels = []                           # (số dòng gốc, id lớp, box) hợp lệ
+        for n, text in lines:
+            try:
+                cls, *box = parse_yolo_line(text)
+            except ValueError:
+                continue
+            if 0 <= cls < len(ds.classes):
+                labels.append((n, cls, tuple(box)))
+
+        rows = preds[stem]
+        for cls_p, conf, *box in rows:
+            if conf < c["conf"] or box[2] * W * box[3] * H < c["min_area_px"]:
+                continue
+            cands = [(iou_xywh(box, b), k) for _, k, b in labels]
+            cands = [(v, k) for v, k in cands if v >= c["iou_missing"]]
+            if not cands:
+                add("POSSIBLE_MISSING", stem, "model thấy vật mà nhãn không có box", conf=conf)
+                continue
+            same = [v for v, k in cands if k == cls_p]
+            other = [v for v, k in cands if k != cls_p]
+            if same:
+                if max(same) < c["iou_loose"]:
+                    add("POSSIBLE_LOOSE_BOX", stem, "đúng vật nhưng box lỏng/lệch",
+                        iou=round(max(same), 3), conf=conf)
+            elif other and max(other) >= c["iou_match"]:
+                add("POSSIBLE_WRONG_CLASS", stem, "cùng vị trí nhưng khác lớp",
+                    iou=round(max(other), 3), conf=conf)
+
+        for n, _, b in labels:
+            if all(iou_xywh(b, r[2:6]) < c["iou_missing"] for r in rows if r[1] >= c["fp_conf"]):
+                add("POSSIBLE_FALSE_POS", stem, "box nhãn không khớp vật nào model thấy", line=n)
+    return issues
