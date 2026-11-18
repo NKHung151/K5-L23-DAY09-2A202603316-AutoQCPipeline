@@ -36,6 +36,10 @@ Hàng đợi (`05_review_queue.csv`, 118 ảnh) xếp theo điểm ưu tiên = t
 1. `img_0001`: thiếu nhãn `person` cho người lính bên phải. Máy chỉ nghi ngờ (`POSSIBLE_MISSING`, conf 0,95); ảnh nằm trong hàng đợi và được người duyệt.
 2. `img_0001`: dòng 1 và dòng 3 gần như trùng hẳn, cùng lớp (`DUP_BOX` dòng 3, máy xoá dòng 3 trong `03_fixes.csv`).
 3. `img_0030`: dòng 9 có `cx = -0,0038`, tràn ảnh 0,023 (`BOX_OUT_OF_IMAGE`). Máy cắt về trong ảnh, nhưng box sau cắt chỉ rộng 0,015 nên bị `BOX_TINY` và `POSSIBLE_FALSE_POS`, ảnh vào hàng đợi.
+4. `img_0070`: người phụ nữ bên trái bị gán `car` (đúng ra `person`), máy cờ `POSSIBLE_WRONG_CLASS`.
+5. `img_0020`: xe buýt bị gán `truck` (đúng ra `bus`), và dòng 3 có id lớp `93` (`BAD_CLASS_ID`, máy xoá dòng đó).
+6. `img_0160`: một xe tải bị gán `bus`, và bãi xe tải rất nhiều xe nhưng nhãn chỉ có 4 box (`POSSIBLE_MISSING`, thiếu nhãn hàng loạt).
+
 Người chỉ lộ một phần ở mép ảnh mà vẫn gán `person` là đúng quy ước, không phải lỗi.
 
 **(a) Chứng minh gate chặn đúng.** Chạy `python -m pipeline.run --budget 0 --reports work/rep_nb --export-dir work/exp_nb`: không có người duyệt nên 6 ảnh thiếu file nhãn còn nguyên. Kết quả: `REWORK — còn 6 lỗi bắt buộc chưa xử lý`, mã thoát **20**, log ghi "KHÔNG xuất", và thư mục `work/exp_nb` **không được tạo**.
