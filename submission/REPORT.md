@@ -47,7 +47,7 @@ Người chỉ lộ một phần ở mép ảnh mà vẫn gán `person` là đú
 **(b) Điểm mù có bằng chứng (từ `calibration_report.md`, conf 0.7 / phash 8):**
 - **Ảnh gần trùng biến đổi mạnh:** `DUP_IMAGE_NEAR` recall chỉ 0,67 (4/6): 2 ảnh trùng gần chèn trong calib lọt qua. Ngoài ra không có cách bắt ảnh bị cắt mạnh rồi thu nhỏ bằng phash.
 - **Box lỏng:** `POSSIBLE_LOOSE_BOX` recall 0,20 (1/5 ca chèn), precision 0,50. Box lệch nhẹ gần như không bị bắt.
-- **Báo động giả của FALSE_POS:** precision chỉ 0,31 (11 FP so với 5 TP trên calib). Trên raw, `POSSIBLE_FALSE_POS` còn 21 ảnh sau người duyệt, phần lớn là nhiễu hơn là lỗi thật.
+- **Báo động giả của FALSE_POS:** precision chỉ 0,31 (11 FP so với 5 TP trên calib). Trên raw, `POSSIBLE_FALSE_POS` còn 21 ảnh sau người duyệt; tôi chưa mở xem từng ảnh nên chưa biết bao nhiêu là lỗi thật, nhưng precision thấp trên calib cho thấy nhiều khả năng phần lớn là báo động giả.
 - **Model cũng nhầm:** nếu yolo26l và nhãn cùng nhầm lớp (xe tải/xe con), máy im lặng.
 
 ## 5. Train: raw vs clean (tùy chọn, chấm riêng)
@@ -76,7 +76,7 @@ Hạn chế: `train_images` là số file trong thư mục train; số ảnh Ult
 
 (b) Ghi chú AI: có dùng Claude Code để viết 4 module và chạy calibrate.
 - **Prompt chính:** đọc toàn bộ dự án rồi viết `label_format`, `gate`, `autofix`, `second_opinion` theo docstring, tránh ngưỡng viết cứng.
-- **Cách kiểm:** chạy `pytest` (79 passed), chạy `pipeline.run`, đối chiếu `img_0001`/`img_0030` với nhãn gốc bằng `viz_labels.py`, mở xem cặp ảnh bị coi là trùng, so ngưỡng trên calib với raw.
+- **Cách kiểm:** chạy `pytest` (79 test của đề xanh, nay 89 với 10 test thưởng), chạy `pipeline.run`, đối chiếu `img_0001`/`img_0030` với nhãn gốc bằng `viz_labels.py`, mở xem cặp ảnh bị coi là trùng, so ngưỡng trên calib với raw.
 - **Một lần AI sai:** AI nhận định box tràn ảnh ở `img_0030` "cắt xong vẫn còn diện tích nên ổn", nhưng thực tế sau khi cắt box chỉ rộng 0,015 và bị cờ `BOX_TINY`/`POSSIBLE_FALSE_POS`; chỉ phát hiện khi đọc `03_fixes.csv` và `02_error_list_v1`.
 
-**Thưởng +3: check mới `aspect_ratio`** (`pipeline/checks/aspect_ratio.py`, test `tests/test_aspect_ratio.py`, 9 test xanh). Cảnh báo `BOX_ASPECT_ODD` (WARN) khi tỉ lệ rộng/cao của box **tính bằng pixel** vượt 8 (ngưỡng đọc từ `cfg["aspect_ratio"]["max_ratio"]`, mặc định 8). Là module độc lập, không đăng ký trong `checks/__init__.py` (file đề bị ghim) nên `make run` không chạy nó và kết luận Hold không đổi. Chạy tay trên `work/run/ds` (203 ảnh sau sửa): 3 cảnh báo ở 3 ảnh: `img_0030` dòng 9 (tỉ lệ 8,6), `img_0042` dòng 5 (9,6), `img_0155` dòng 2 (9,8). Dòng 9 của `img_0030` chính là box tràn mép trái do `autofix` cắt xuống còn rộng 0,015 (xem mục 4), nên check này bắt được tác dụng phụ của việc cắt box.
+**Thưởng +3: check mới `aspect_ratio`** (`pipeline/checks/aspect_ratio.py`, test `tests/test_aspect_ratio.py`, 10 test xanh). Cảnh báo `BOX_ASPECT_ODD` (WARN) khi tỉ lệ rộng/cao của box **tính bằng pixel** vượt 8 (ngưỡng đọc từ `cfg["aspect_ratio"]["max_ratio"]`, mặc định 8). Là module độc lập, không đăng ký trong `checks/__init__.py` (file đề bị ghim) nên `make run` không chạy nó và kết luận Hold không đổi. Chạy tay trên `work/run/ds` (203 ảnh sau sửa): 3 cảnh báo ở 3 ảnh: `img_0030` dòng 9 (tỉ lệ 8,6), `img_0042` dòng 5 (9,6), `img_0155` dòng 2 (9,8). Dòng 9 của `img_0030` chính là box tràn mép trái do `autofix` cắt xuống còn rộng 0,015 (xem mục 4), nên check này bắt được tác dụng phụ của việc cắt box.
